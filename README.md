@@ -13,7 +13,7 @@ linear algebra, and dynamical systems.
 The dynamical system is described as follows: 
 
 
-![equation](https://latex.codecogs.com/gif.latex?%5Cbegin%7Balign*%7D%20%5Cfrac%7Bdx%7D%7Bdt%7D%20%26%3D%20-%5Cmu_%7BC%7Dx%20%5Cleft%28%20ln%5Cfrac%7Bx%7D%7Bx_%7B%5Cinfty%7D%7D%20%5Cright%20%29%20-%20%5Cgamma%20xy%20-%20k_%7Bx%7Dxu%20%5C%5C%20%5Cfrac%7Bdy%7D%7Bdt%7D%20%26%3D%20%5Cmu_%7BI%7D%28x%20-%20%5Cbeta%20x%5E%7B2%7D%29y%20-%20%5Cdelta%20y%20&plus;%20%5Calpha%20&plus;%20k_%7By%7Dyv%20%5Cend%7Balign*%7D)
+![equation](https://latex.codecogs.com/gif.latex?%5Cbegin%7Balign*%7D%20%5Cfrac%7Bdx%7D%7Bdt%7D%20%26%3D%20-%5Cmu_%7BC%7Dx%20ln%20%5Cleft%28%20%5Cfrac%7Bx%7D%7Bx_%7B%5Cinfty%7D%7D%20%5Cright%20%29%20-%20%5Cgamma%20xy%20-%20k_%7Bx%7Dxu%20%5C%5C%20%5Cfrac%7Bdy%7D%7Bdt%7D%20%26%3D%20%5Cmu_%7BI%7D%28x%20-%20%5Cbeta%20x%5E%7B2%7D%29y%20-%20%5Cdelta%20y%20&plus;%20%5Calpha%20&plus;%20k_%7By%7Dyv%20%5Cend%7Balign*%7D)
 
 
 
