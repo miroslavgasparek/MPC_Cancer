@@ -3,8 +3,8 @@ This repository contains the MATLAB scripts for the implementation of the Model 
 
 This approach combines the linearization of the nonlinear dynamical system, which is subsequently combined with the application
 of the condensed approach to the construction and solution of the Quadratic Programming problem over the length of the
-prediction horizon, as described in
-Jerez, J. L., Kerrigan, E. C., & Constantinides, G. A. (2011). A Condensed and Sparse QP Formulation for Predictive Control. https://doi.org/10.0/Linux-x86_64. The link can be found [here](https://ieeexplore.ieee.org/abstract/document/6160293).
+prediction horizon, as described in the paper
+"Jerez, J. L., Kerrigan, E. C., & Constantinides, G. A. (2011). A Condensed and Sparse QP Formulation for Predictive Control. https://doi.org/10.0/Linux-x86_64." The link can be found [here](https://ieeexplore.ieee.org/abstract/document/6160293).
 
 Of course, the cancer treatment implementation can be easily amended so that different clinical scenarios can be implemented. Code is well commented and you should be able to read through that, given that you have the understanding of the basic Quadratic Programming,
 linear algebra, dynamical systems, and the control theory.
