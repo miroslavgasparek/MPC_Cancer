@@ -1,20 +1,36 @@
-%% 29 May 2019 Miroslav Gasparek
+%% 29 July 2019 Miroslav Gasparek
 % Example of the linearized constrained Model Predictive Control (MPC) of 
-% the nonlinear pendulum with the linear damping.
+% the nonlinear cancer treatment model with combined chemotherapy and
+% immunotherapy.
 % 
-% The equations of the pendulum are of the form:
+% Based on the following paper:
+% Sharifi, N., Ozgoli, S., & Ramezani, A. (2017). 
+% Multiple model predictive control for optimal drug administration 
+% of mixed immunotherapy and chemotherapy of tumours. 
+% Computer Methods and Programs in Biomedicine, 144, 13–19. 
+% https://doi.org/10.1016/J.CMPB.2017.03.012
 % 
-%     dx(1)/dt = x(2);
-%     dx(2)/dt = (-g/l)*sin(x(1)) -b*x(2)+ u;
+% The equations of the cancer dynamics have the following form:
+% 
+%   dx/dt = - uC*x*ln(x / x_inf) - gammma*x*y - k_x*x*u
+%   dy/dt = uI*(x-beta*x^2) - delta*x + alpha + k_y*y*v
 %
 % where:
-% g is acceleration due to the gravity
-% l is the length of the rod
-% b is the damping coefficient
-% u is the input, the normalized force
+% x: tumor volume (10^6 cells)
+% y: immune-competent cells density (non-dim.)
+% alpha: natural rate of influx of immune competent cells (1/day)
+% beta: inverse threshold for the tumor suppresion (non-dim.)
+% gamma: interaction rate between the immune comp. cells and tumor (10^7 cells/day)
+% delta: death rate of immune cells (1/day)
+% uC: tumor growth parameter (10^7 cells/day)
+% uI: tumor stimulated proliferation rate (10^7 cells/day)
+% x_inf: tumor carrying capacity
+% k_x: killing parameter of chemotherapy wrt. tumor cells (10^7 cells/day)
+% k_y: rate of immune cells proliferation when immunotherapy is used (non-dim.)
+
 
 % Model Predictive Control scheme can be formulated as an optimization 
-% problem with horizon length np:
+% problem with horizon length np, using the standard iterative LQR scheme:
 %
 %   Minimize J = 0.5*(X-rr)'*Q*(X-rr) + 0.5u'*R*u = 0.5*u'*H*u + x0*G'*u 
 %   
@@ -23,7 +39,6 @@
 %            ul <=  u <= uh
 %            x(k+1) = f(x(k),u(k))
 %            X = [x(1); x(2);...;x(np)];
-
 clear; clc; close all;
 
 %% Parameters definition
@@ -35,18 +50,19 @@ sys.uC = 0.5599; % 10^7 cells/day
 sys.uI = 0.00484; % 10^7 cells/day
 sys.x_inf = 780; % 10^6 cells
 sys.k_x = 1; % 10^7 cells/day
-sys.k_y = 0.7; %  1/day
-
+sys.k_y = 0.1; %  1/day
 
 %% Output matrices
 C = eye(2); % We assume that both states are directly observable
 D = zeros(2,2); % We assume that there is no direct term
 
 %% Initial Conditions
-x0 = 700; % 10^6
-y0 = 0.20; % Non-dimensional
+% Initial tumour mass
+x0 = 800; % 10^6
+% Initial number of immune effector cells 
+y0 = 0.05; % Non-dimensional
 
-% Initial states
+% Initial state vector
 x = [x0; y0];
 
 %% Constraints
@@ -55,13 +71,15 @@ x = [x0; y0];
 % cl <= Dcon * x <= ch
 % ul <=  u <= uh
 %
-% Constraints on the states are such that states cannot be negative
-% And they cannot go above the carrying capacity for the tumour and 
-% they cannot go below the minimum amount of the cells 
-y_min = 0.01; % Non-dimensional
-y_max = 3;
+% Constraints on the states are such that states representing 
+% the cell counts cannot be negative
+% Also, the tumour mass should not exceed some maximum value
+% and immune effector cells 
+y_min = 0.001; % Non-dimensional
+y_max = 2; % Non-dimensional
 
-x_max = 1000; % 10^6 cells
+x_min = 0.1; % Nonzero to avoid simulation difficulties
+x_max = 900; % 10^6 cells
 
 cl = [0.01; y_min];
 ch = [x_max; y_max];
@@ -70,47 +88,52 @@ ch = [x_max; y_max];
 Dcon = eye(2);
 
 % Constraints on the inputs' min and max values
-ui=[0.001; 0.001];         % initial zero cotrol inputs
-umin = [0; 0]; % ug, minimum input values
-umax = [1; 1]; % ug, maximum input values
+ui=[0.01; 0.01];         % initial zero control inputs, set to very small
+                           % value to avoid the constraints
+umin = [0; 0]; % constraint, minimum input values
+umax = [1; 1]; % constraint, maximum input values
 
 %% MPC simulation parameters
 np = 10;        % horizon length 
 nx = 2;         % number of states 
 nu = 2;         % number of inputs
 no = size(C,1); % number of outputs
-Ts = 0.2;     % step size
-Tfinal = 10;     % final time
+Ts = 0.01;     % step size
+Tfinal = 30;     % final time
 
 %% Declare penalty matrices
-q_x = 100;
-q_y = 0.1;
+q_x = 5;
+q_y = 5;
 Q = [q_x, 0;
      0  , q_y]; % relative importance of states
 
-r_x = 10;
-r_y = 2;
+r_x = 25;
+r_y = 1;
 
 R = [r_x, 0;
      0,   r_y];  % penalizing weights of control inputs
  
-P = 0.1*zeros(2,2); % Low terminal cost
+P = 1*eye(2,2); % Low terminal cost
 
 %% Reference generation
-% Generating simple step reference of the form [0.5 ; 0]
+% Generating simple step-like reference
 % Additional np points provided at the end due to the prediction horizon 
-% Total desired tumour volume
-x_Target = 20; % mm^3
-ref = [x_Target * ones(1,Tfinal/Ts + np);...
-       ones(1,Tfinal/Ts + np)];
+% Total desired tumour volume is set to decrease
+x_Target1 = 300; % mm^3
+x_Target2 = 50; % mm^3
+
+% Total desired effector cells density
+EC_Target = 0.9; % Arbitrary units
+
+ref = [ [x_Target1 * ones(1,(Tfinal/Ts + np)/2), x_Target2 * ones(1, (Tfinal/Ts + np)/2)];...
+       EC_Target*ones(1,Tfinal/Ts + np)];
 
 %% Model generation
 % The model is an anonymous function that represents the equation which describes 
-% the dynamical system in the form of dx/dt =f(x,u), in this case, the
-% nonlinear pendulum with linear damping
-model = @(x,u) genTumourODE(x,u,sys);
+% the dynamical system in the form of dx/dt =f(x,u)
+model = @(x,u) genCancerODE(x,u,sys);
 
-% initialization of vectors for reference and output results 
+% Initialization of vectors for reference and output results 
 rr = zeros(np*nx,1);
 y  = zeros(no,Tfinal/Ts);
 uh = zeros(nu,Tfinal/Ts);
@@ -152,22 +175,34 @@ for t=1:Tfinal/Ts
     % mpcqpsolver.
     H = chol(H,'lower');
     H = (H'\eye(size(H)))';
-    % Set the constraints to be inactive at this point
-    iA = false(size(bb));
+    % Set the constraints to be inactive at this point for the 
+    % first pass, then use the constraints generated by the solver
+    if t == 1
+        iA = false(size(bb));
+    else
+        iA = iA_new;
+    end
     
     % Generate the optimal input step
-    [u,~,iA] = genMPController(H,G,F,bb,J,L,x,rr(1:nx),2,iA);
-    ui = u(1:nu);     %providing first solution as input to our system
-    uh(:,t) = ui;     %storing input
+    [u,status,iA_new] = genMPController(H,G,F,bb,J,L,x,rr(1:nx),2,iA);
+    
+    % Use zero input when the solution is infeasible or num. error occurs
+    if status == -1 || status == -2
+        ui = zeros(nu,1);
+    end
+    
+    status_vec(t) = status; % Store the status of the solver at each step
+    ui = u(1:nu);           % providing first solution as input to our system
+    uh(:,t) = ui;           % storing input
     
 end
 
-%% Plot the results
+%% Plotting of the results
 % Get the time vector for plotting
 tt = Ts:Ts:Tfinal;
 
 figure(1);
-sgtitle('Tumour treatment optimisation using MPC',...
+sgtitle('Tumor treatment optimisation using MPC',...
         'interpreter','latex','fontsize',15)
 % Plot the pendulum's position
 subplot(4,1,1)
@@ -177,9 +212,9 @@ plot(tt, cl(1)*ones(1,length(tt)),'k--','LineWidth',2)
 plot(tt, ch(1)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off')
 plot(tt,y(1,:),'LineWidth',2)
 xlabel('Time [Days]','interpreter','latex','fontsize',10)
-ylabel('Tumour mass [$10^{6} cells$]','interpreter','latex','fontsize',10)
-title('Tumour mass evolution','interpreter','latex','fontsize',12)
-legend('ref. trajectory','constraints','Tumour mass','interpreter','latex',...
+ylabel('Tumor mass [$10^{6} cells$]','interpreter','latex','fontsize',10)
+title('Tumor mass evolution','interpreter','latex','fontsize',12)
+legend('ref. trajectory','constraints','Tumor mass','interpreter','latex',...
        'location','east','fontsize',6)
 ax = gca;
 ax.YLim = [-0.1, 1000];
@@ -187,7 +222,7 @@ ax.YLim = [-0.1, 1000];
 % Plot the pendulum's angular velocity
 subplot(4,1,2)
 hold on
-plot(tt, ref(2,1:(Tfinal/Ts)),'r--','LineWidth',2)
+plot(tt, EC_Target*ref(2,1:(Tfinal/Ts)),'r--','LineWidth',2)
 plot(tt, cl(2)*ones(1,length(tt)),'k--','LineWidth',2)
 plot(tt, ch(2)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off')
 plot(tt,y(2,:),'LineWidth',2)
@@ -207,11 +242,11 @@ plot(tt, umax(1)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off'
 plot(tt,uh(1,:),'LineWidth',2)
 xlabel('Time [s]','interpreter','latex','fontsize',10)
 ylabel('Cytotoxic agent [AU]','interpreter','latex','fontsize',10)
-title('Optimalized Chemotherapeutic treatment','interpreter','latex','fontsize',12)
+title('Optimized Chemotherapeutic treatment','interpreter','latex','fontsize',12)
 legend('constraints','CA [AU]','interpreter','latex',...
        'location','southeast','fontsize',6)
 ax = gca;
-ax.YLim = [-0.1, 1.2];
+ax.YLim = [-0.1, max(uh(1,:))+1];
 
 subplot(4,1,4)
 hold on
@@ -220,11 +255,11 @@ plot(tt, umax(2)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off'
 plot(tt,uh(2,:),'LineWidth',2)
 xlabel('Time [s]','interpreter','latex','fontsize',10)
 ylabel('IS agent [AU]','interpreter','latex','fontsize',10)
-title('Optimalized Immunotherapy treatment','interpreter','latex','fontsize',12)
+title('Optimized Immunotherapy treatment','interpreter','latex','fontsize',12)
 legend('constraints','IA [AU]','interpreter','latex',...
        'location','northeast','fontsize',6)
 ax = gca;
-ax.YLim = [-0.1, 2];
+ax.YLim = [-0.1, max(uh(2,:))+1];
 
 fig = gcf;
 fig.Position = [545.0000   61.0000  891.2000  721.6000];

@@ -2,7 +2,7 @@
 % Symbolic expression of the linearized system for the model predictive
 % control of the cancer treatment
 
-function [A, B, C, D] = genTumourSystemMatrices(x_in, pars, Ts)
+function [A, B, C, D] = genCancerSystemMatrices(x_in, pars, Ts)
 
 %% Define the ODEs for the system
 x = sym('x', [9 1]);

@@ -14,14 +14,8 @@ function [Alin, Blin] = linearizeCancerODE(x_in, u_in, sys, Ts)
     % Define the equations of the continuous state evolution
     f_state1 = - sys.uC * x(1) * log(x(1)/sys.x_inf) - sys.gamma * x(1)*x(2) - sys.k_x * x(1) * u(1);
     f_state2 = sys.uI * (x(1) - sys.beta * x(1)^2)*x(2) - sys.delta*x(2) + sys.alpha + sys.k_y * x(2) * u(2);
-%     f_state3 = - km * x(3) * log(theta/( x(1) + x(2) + x(3) )) + ks * x(2);
-%     f_state4 = - k01 * x(4) + u;
-%     f_state5 = - k12 * x(5) + k01 * x(4);
-%     f_state6 = - kr2 * x(6) - k23 * x(6) + k12 * x(5);
-%     f_state7 = - kr3 * x(7) + k23 * x(6);
-%     f_state8 = alpha - beta * x(8) - kc * x(8) * (x(6)/V + sb*x(7)/V);
-%     f_state9 = x(1) + x(2) + x(3);
     
+    % Create the column vector of the functions
     f_state = [f_state1;
                f_state2;];
            
@@ -36,6 +30,7 @@ function [Alin, Blin] = linearizeCancerODE(x_in, u_in, sys, Ts)
     % Define the state matrix
     Alin = Afun(x_in, u_in);
     Blin = Bfun(x_in, u_in);
+    
     % Convert the continuous system to discrete system if the sampling
     % period is provided
     c_sys = ss(Alin, Blin, [], []);

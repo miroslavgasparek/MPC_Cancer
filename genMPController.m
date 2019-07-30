@@ -1,4 +1,7 @@
-%% Miroslav Gasparek
+%% 29 July 2019 Miroslav Gasparek
+% The function calculates the optimal input for the dynamical system
+% in a condensed form using the MATLAB built-in mpc quadratic programming
+% solver
 
 function [u,status,iA1] = genMPController(H,G,F,bb,J,L,x,xTarget,m,iA)
 % H       - quadratic term in the cost function (Linv if using mpcqpsolver).
@@ -42,7 +45,7 @@ fcon = G*(x - xTarget);
 Acon = -F;
 bcon = -(J*x + L*xTarget + bb);
 
-
+% "Feed" the mpcqpsolver with the quadratic problem in the proper form
 [U,status,iA1]=mpcqpsolver(H,fcon,Acon,bcon,[],zeros(0,1),iA,opt);
 u = U(1:m,1);
 
