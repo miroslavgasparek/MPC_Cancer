@@ -41,16 +41,9 @@
 %            X = [x(1); x(2);...;x(np)];
 clear; clc; close all;
 
+
 %% Parameters definition
-sys.alpha = 0.1181; % 1/day
-sys.beta = 0.00264; % 
-sys.gamma = 1; % 10^7 cells/day
-sys.delta = 0.37451; % 1/day
-sys.uC = 0.5599; % 10^7 cells/day
-sys.uI = 0.00484; % 10^7 cells/day
-sys.x_inf = 780; % 10^6 cells
-sys.k_x = 1; % 10^7 cells/day
-sys.k_y = 0.1; %  1/day
+sys = cancerParameters();
 
 %% Output matrices
 C = eye(2); % We assume that both states are directly observable
@@ -58,7 +51,7 @@ D = zeros(2,2); % We assume that there is no direct term
 
 %% Initial Conditions
 % Initial tumour mass
-x0 = 800; % 10^6
+x0 = 400; % 10^6
 % Initial number of immune effector cells 
 y0 = 0.05; % Non-dimensional
 
@@ -84,7 +77,7 @@ x_max = 900; % 10^6 cells
 cl = [0.01; y_min];
 ch = [x_max; y_max];
 
-% Constraints are independent, hence Dcon is identity matrix
+% Constraints on the states are independent, hence Dcon is identity matrix
 Dcon = eye(2);
 
 % Constraints on the inputs' min and max values
@@ -98,34 +91,33 @@ np = 10;        % horizon length
 nx = 2;         % number of states 
 nu = 2;         % number of inputs
 no = size(C,1); % number of outputs
-Ts = 0.01;     % step size
+Ts = 0.05;     % step size
 Tfinal = 30;     % final time
 
 %% Declare penalty matrices
 q_x = 5;
-q_y = 5;
+q_y = 0;
 Q = [q_x, 0;
      0  , q_y]; % relative importance of states
 
-r_x = 25;
-r_y = 1;
+r_x = 10000;
+r_y = 100;
 
 R = [r_x, 0;
      0,   r_y];  % penalizing weights of control inputs
  
-P = 1*eye(2,2); % Low terminal cost
+P = 2*eye(2,2); % Low terminal cost
 
 %% Reference generation
 % Generating simple step-like reference
 % Additional np points provided at the end due to the prediction horizon 
 % Total desired tumour volume is set to decrease
-x_Target1 = 300; % mm^3
-x_Target2 = 50; % mm^3
+x_Target = 50; % mm^3
 
 % Total desired effector cells density
-EC_Target = 0.9; % Arbitrary units
+EC_Target = 1.0; % Arbitrary units
 
-ref = [ [x_Target1 * ones(1,(Tfinal/Ts + np)/2), x_Target2 * ones(1, (Tfinal/Ts + np)/2)];...
+ref = [x_Target * ones(1,(Tfinal/Ts + np));...
        EC_Target*ones(1,Tfinal/Ts + np)];
 
 %% Model generation
@@ -139,7 +131,6 @@ y  = zeros(no,Tfinal/Ts);
 uh = zeros(nu,Tfinal/Ts);
 
 for t=1:Tfinal/Ts
-    
     % Get the reference trajectory for the whole horizon
     rr =  ref_for_hor(rr,ref,t,np,nx);
     
@@ -197,14 +188,23 @@ for t=1:Tfinal/Ts
     
 end
 
+%% Computing of the total amount of treatment used 
+% Total amount of chemotherapy used
+chem_tot = sum(uh(1,:))*Ts;
+imm_tot = sum(uh(2,:))*Ts;
+
+fprintf('Total amount of chemotherapy used: %.2f units\n', chem_tot);
+fprintf('Total amount of immunotherapy used: %.2f units\n', imm_tot);
+
+
 %% Plotting of the results
 % Get the time vector for plotting
 tt = Ts:Ts:Tfinal;
 
 figure(1);
-sgtitle('Tumor treatment optimisation using MPC',...
+sgtitle({'Time evolution of the cancer proliferation system',['Combined chemotherapy and immunotherapy, initial tumor mass: ',num2str(x0),'$\times 10^{6}$ cells']},...
         'interpreter','latex','fontsize',15)
-% Plot the pendulum's position
+% Plot the tumor volume time evolution
 subplot(4,1,1)
 hold on
 plot(tt, ref(1,1:(Tfinal/Ts)),'r--','LineWidth',2)
@@ -213,49 +213,50 @@ plot(tt, ch(1)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off')
 plot(tt,y(1,:),'LineWidth',2)
 xlabel('Time [Days]','interpreter','latex','fontsize',10)
 ylabel('Tumor mass [$10^{6} cells$]','interpreter','latex','fontsize',10)
-title('Tumor mass evolution','interpreter','latex','fontsize',12)
+title('Tumor mass time evolution','interpreter','latex','fontsize',12)
 legend('ref. trajectory','constraints','Tumor mass','interpreter','latex',...
        'location','east','fontsize',6)
 ax = gca;
 ax.YLim = [-0.1, 1000];
 
-% Plot the pendulum's angular velocity
+% Plot the immune effector cell time evolution
 subplot(4,1,2)
 hold on
-plot(tt, EC_Target*ref(2,1:(Tfinal/Ts)),'r--','LineWidth',2)
+% plot(tt, ref(2,1:(Tfinal/Ts)),'r--','LineWidth',2)
 plot(tt, cl(2)*ones(1,length(tt)),'k--','LineWidth',2)
 plot(tt, ch(2)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off')
 plot(tt,y(2,:),'LineWidth',2)
-xlabel('Time [s]','interpreter','latex','fontsize',10)
+xlabel('Time [Days]','interpreter','latex','fontsize',10)
 ylabel('Norm. EC mass [AU]','interpreter','latex','fontsize',10)
-title('Effector immune cells evolution','interpreter','latex','fontsize',12)
-legend('ref. trajectory','constraints','EC','interpreter','latex',...
+title('Effector immune cells time evolution','interpreter','latex','fontsize',12)
+legend('constraints','EC','interpreter','latex',...
         'location','northeast','fontsize',6)
 ax = gca;
 ax.YLim = [-0.1, 2];
 
-% Plot the normalized input force
+% Plot the chemotherapy treatment evolution
 subplot(4,1,3)
 hold on
 plot(tt, umin(1)*ones(1,length(tt)),'k--','LineWidth',2)
 plot(tt, umax(1)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off')
 plot(tt,uh(1,:),'LineWidth',2)
-xlabel('Time [s]','interpreter','latex','fontsize',10)
+xlabel('Time [Days]','interpreter','latex','fontsize',10)
 ylabel('Cytotoxic agent [AU]','interpreter','latex','fontsize',10)
-title('Optimized Chemotherapeutic treatment','interpreter','latex','fontsize',12)
+title('Chemotherapeutic treatment','interpreter','latex','fontsize',12)
 legend('constraints','CA [AU]','interpreter','latex',...
        'location','southeast','fontsize',6)
 ax = gca;
 ax.YLim = [-0.1, max(uh(1,:))+1];
 
+% Plot the immunotherapy treatment evolution
 subplot(4,1,4)
 hold on
 plot(tt, umin(2)*ones(1,length(tt)),'k--','LineWidth',2)
 plot(tt, umax(2)*ones(1,length(tt)),'k--','LineWidth',2,'HandleVisibility','off')
 plot(tt,uh(2,:),'LineWidth',2)
-xlabel('Time [s]','interpreter','latex','fontsize',10)
+xlabel('Time [Days]','interpreter','latex','fontsize',10)
 ylabel('IS agent [AU]','interpreter','latex','fontsize',10)
-title('Optimized Immunotherapy treatment','interpreter','latex','fontsize',12)
+title('Immunotherapy treatment','interpreter','latex','fontsize',12)
 legend('constraints','IA [AU]','interpreter','latex',...
        'location','northeast','fontsize',6)
 ax = gca;

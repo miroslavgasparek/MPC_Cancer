@@ -12,19 +12,12 @@
 clear; clc; close all;
 
 %% Parameters definition
-sys.alpha = 0.1181; % 1/day
-sys.beta = 0.00264; % 
-sys.gamma = 1; % 10^7 cells/day
-sys.delta = 0.37451; % 1/day
-sys.uC = 0.5599; % 10^7 cells/day
-sys.uI = 0.00484; % 10^7 cells/day
-sys.x_inf = 780; % 10^6 cells
-sys.k_x = 1; % 10^7 cells/day
-sys.k_y = 0.1; %  1/day
+sys = cancerParameters();
+
 
 %% Find the fixed points of no-treatment model
 % Assume that u = 0, v = 0
-u_in = [0; 0];
+u_in = [0; 1];
 x0 = [1000,5];
 % Hide the text output of the fsolve
 options = optimset('Display','off');
@@ -48,7 +41,8 @@ figure(1)
 xlabel('Tumor mass [$10^{6}$ cells]','fontsize',15,'interpreter','latex')
 ylabel('Immune effector cells','fontsize',15,'interpreter','latex')
 title(['Phase plane of the cancer proliferation system, u = '...
-       ,num2str(u_in(1)), ', v = ', num2str(u_in(2))],'fontsize',15,'interpreter','latex')
+       num2str(u_in(1)), ', v = ', num2str(u_in(2))],...
+       'fontsize',15,'interpreter','latex')
 
 hold on
 for i=1:length(tumor_vec)
@@ -61,19 +55,29 @@ for i=1:length(tumor_vec)
         sol = ode45(@(t,x)genCancerODE(x,u_in, sys), tspan, x0);
         % Get the fixed point coordinates for the given init. conditions
         [x_fix, ~] = fsolve(@(x) genCancerODE(x,u_in, sys), x0, options);
-        x_fix_mat(:,k) = x_fix;
-        x_fix_round = round(x_fix_mat,2);
-        [tumor_fp, iA1] = unique(x_fix_round(1,:), 'stable');
-        [imm_cell_fp, iA2] = unique(x_fix_round(2,:), 'stable');
-
+        % If the fixed points are non-negative, store them in a matrix 
+        % of fixed points
+        if all(x_fix >=0)
+            x_fix_mat(:,k) = x_fix;
+        end    
         % Plot the trajectory on the phase plane
-        p = plot(sol.y(1,:), sol.y(2,:),'k-','LineWidth',1.5);
+        p = plot(sol.y(1,:), sol.y(2,:),'k-','LineWidth',1);
     end
 end
+
+% Get the coordinates and pick the unique fixed points
+x_fix_round = round(x_fix_mat,2);
+[tumor_fp, iA1] = unique(x_fix_round(1,:), 'stable');
+[imm_cell_fp, iA2] = unique(x_fix_round(2,:), 'stable');
+% Check if the fixed points are too close to each other
+
+% Plot the fixed points on the phase plane
 s = scatter(tumor_fp, imm_cell_fp,40,'filled', 'r');
+
+% Plot the legend
 legend([p(1), s(1)],'Trajectories','Fixed Points','interpreter','latex')
 hold off
-
+% End plotting
 
 %% Stability analysis of the fixed points
 % Define the symbolic variables
